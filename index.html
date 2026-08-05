@@ -2,7 +2,10 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Dashboard Penulis</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
@@ -28,130 +31,323 @@
     </script>
 </head>
 <body>
-    <header class="viewing-area">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <div>
-                <h1>Dashboard</h1>
-                <p class="status-sync">⏳ Memuat...</p>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <span id="user-name" style="color: #888; font-size: 0.8rem;"></span>
-                <button id="btn-login" class="badge badge-published" style="border:none; cursor:pointer; font-size: 0.8rem; padding: 6px 12px;">
-                    🔗 Login Google
-                </button>
-                <button id="btn-logout" class="badge badge-editing hidden" style="border:none; cursor:pointer; font-size: 0.8rem; padding: 6px 12px;">
-                    🚪 Logout
-                </button>
-            </div>
-        </div>
-    </header>
+    <!-- Offline Status Banner -->
+    <div id="offline-banner" class="offline-banner hidden">
+        <span>📡 Anda sedang offline. Perubahan akan disinkronkan nanti.</span>
+    </div>
 
-    <main class="interaction-area">
-        <section class="dashboard-stats">
-            <div class="focus-block">
-                <h3>Draft</h3>
-                <p class="count" id="count-draft">0</p>
-            </div>
-            <div class="focus-block">
-                <h3>Editing</h3>
-                <p class="count" id="count-editing">0</p>
-            </div>
-            <div class="focus-block">
-                <h3>Published</h3>
-                <p class="count" id="count-published">0</p>
-            </div>
-        </section>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
-        <section class="project-list">
-            <h2>Proyek Aktif</h2>
-        </section>
+    <!-- ========== DASHBOARD SCREEN ========== -->
+    <div id="dashboard-screen" class="screen">
+        <header class="viewing-area">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">✍️</div>
+                    <div>
+                        <h1>Dashboard</h1>
+                        <p class="status-sync" id="sync-status">⏳ Memuat...</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-theme-toggle" class="icon-btn-circle" title="Ganti Tema">🌙</button>
+                    <div class="user-section">
+                        <span id="user-name"></span>
+                        <button id="btn-login" class="btn-login">🔗 Login</button>
+                        <button id="btn-logout" class="btn-login hidden">🚪 Logout</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="search-input" placeholder="Cari cerita..." autocomplete="off">
+                <button id="btn-clear-search" class="clear-search hidden">✕</button>
+            </div>
+        </header>
 
-        <button class="fab-action">+ Tulis Cerita</button>
-        
-        <footer style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
-            <p style="color: #444; font-size: 0.75rem;">© 2026 | Design by Sahawn</p>
-        </footer>
-    </main>
+        <main class="interaction-area">
+            <!-- Stats Cards -->
+            <section class="dashboard-stats">
+                <div class="focus-block" data-status="draft">
+                    <div class="stat-icon">📝</div>
+                    <h3>Draft</h3>
+                    <p class="count" id="count-draft">0</p>
+                </div>
+                <div class="focus-block" data-status="editing">
+                    <div class="stat-icon">✏️</div>
+                    <h3>Editing</h3>
+                    <p class="count" id="count-editing">0</p>
+                </div>
+                <div class="focus-block" data-status="published">
+                    <div class="stat-icon">🚀</div>
+                    <h3>Published</h3>
+                    <p class="count" id="count-published">0</p>
+                </div>
+            </section>
 
-    <!-- Story Detail Screen -->
-    <div id="story-detail-screen" class="hidden">
-        <header class="detail-header">
+            <!-- Filter Chips -->
+            <div class="filter-chips" id="filter-chips">
+                <button class="chip active" data-filter="all">Semua</button>
+                <button class="chip" data-filter="Draft">Draft</button>
+                <button class="chip" data-filter="Editing">Editing</button>
+                <button class="chip" data-filter="Published">Published</button>
+            </div>
+
+            <!-- Project List -->
+            <section class="project-list">
+                <div class="section-header">
+                    <h2>Proyek Aktif</h2>
+                    <span id="project-count" class="meta-count">0 cerita</span>
+                </div>
+                <div id="projects-container">
+                    <!-- Skeleton Loading -->
+                    <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
+                    <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
+                    <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
+                </div>
+            </section>
+
+            <button class="fab-action" id="btn-new-story">
+                <span class="fab-icon">+</span>
+                <span class="fab-text">Tulis Cerita</span>
+            </button>
+            
+            <footer class="app-footer">
+                <p>© 2026 | Design by Sahawn</p>
+            </footer>
+        </main>
+    </div>
+
+    <!-- ========== STORY DETAIL SCREEN ========== -->
+    <div id="story-detail-screen" class="screen hidden">
+        <header class="detail-header glass">
             <button id="btn-back-dashboard" class="icon-btn">← Dashboard</button>
             <h2 id="detail-story-title">Judul Cerita</h2>
             <button id="btn-open-bible" class="icon-btn" style="color: #a855f7;">📖 Bible</button>
         </header>
+        
         <main class="detail-workspace">
-            <section class="focus-block synopsis-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3>Sinopsis</h3>
-                    <select id="story-status-dropdown" style="background:#2a2a2a; color:#fff; border:1px solid #444; outline:none; padding:4px 12px; border-radius:12px; font-family:inherit; font-size: 0.85rem; cursor:pointer;">
-                        <option value="Draft">Draft</option>
-                        <option value="Editing">Editing</option>
-                        <option value="Published">Published</option>
+            <!-- Story Info Card -->
+            <section class="info-card">
+                <div class="info-card-header">
+                    <div>
+                        <span id="detail-story-badge" class="badge badge-draft">Draft</span>
+                        <p class="meta-data" id="detail-story-meta">Terakhir diubah: -</p>
+                    </div>
+                    <select id="story-status-dropdown" class="status-select">
+                        <option value="Draft">📝 Draft</option>
+                        <option value="Editing">✏️ Editing</option>
+                        <option value="Published">🚀 Published</option>
                     </select>
                 </div>
-                <p id="detail-story-synopsis">Memuat sinopsis...</p>
+                <div class="synopsis-box">
+                    <h3>Sinopsis</h3>
+                    <p id="detail-story-synopsis">Memuat sinopsis...</p>
+                </div>
             </section>
+
+            <!-- Writing Stats Bar -->
+            <div class="writing-stats-bar">
+                <div class="stat-item">
+                    <span class="stat-value" id="detail-total-chapters">0</span>
+                    <span class="stat-label">Chapter</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="detail-total-words">0</span>
+                    <span class="stat-label">Kata</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="detail-est-read">0m</span>
+                    <span class="stat-label">Baca</span>
+                </div>
+            </div>
 
             <section class="chapter-list-section">
                 <div class="section-header">
                     <h2>Daftar Chapter</h2>
-                    <div>
-                        <button id="btn-export-txt" class="badge badge-draft" style="border:none; cursor:pointer; margin-right: 8px; background-color: #333;">↓ Export TXT</button>
-                        <button id="btn-new-chapter" class="badge badge-editing" style="border:none; cursor:pointer;">+ Bab Baru</button>
+                    <div class="section-actions">
+                        <button id="btn-export-txt" class="btn-ghost">↓ TXT</button>
+                        <button id="btn-export-md" class="btn-ghost">↓ MD</button>
+                        <button id="btn-new-chapter" class="btn-primary-sm">+ Bab Baru</button>
                     </div>
                 </div>
-                <div id="chapters-container"></div>
+                <div id="chapters-container" class="sortable-list"></div>
             </section>
         </main>
     </div>
 
-    <!-- Editor Screen (TEXTAREA BIASA) -->
-    <div id="editor-screen" class="hidden">
-        <header class="editor-header">
+    <!-- ========== EDITOR SCREEN ========== -->
+    <div id="editor-screen" class="screen hidden">
+        <header class="editor-header glass">
             <button id="btn-back" class="icon-btn">← Kembali</button>
             <h2 id="editor-title">Judul Cerita</h2>
-            <button id="btn-save" class="icon-btn">Simpan</button>
+            <div class="editor-header-actions">
+                <button id="btn-focus-mode" class="icon-btn" title="Focus Mode (Ctrl+Shift+F)">🔲</button>
+                <button id="btn-save" class="icon-btn">Simpan</button>
+            </div>
         </header>
+        
         <main class="editor-workspace">
+            <!-- Goal & Timer Bar -->
+            <div class="goal-bar" id="goal-bar">
+                <div class="goal-info">
+                    <span id="goal-display">Target: 500 kata</span>
+                    <div class="goal-progress">
+                        <div class="goal-progress-fill" id="goal-progress-fill"></div>
+                    </div>
+                </div>
+                <div class="timer-section">
+                    <button id="btn-timer-toggle" class="timer-btn">▶️ 25:00</button>
+                    <button id="btn-goal-settings" class="icon-btn-sm">⚙️</button>
+                </div>
+            </div>
+
             <input type="text" id="chapter-title" placeholder="Judul Chapter (Opsional)" />
             <textarea id="chapter-content" placeholder="Mulai merangkai kata..."></textarea>
-            <div style="text-align: right; margin-top: 8px;">
-                <span id="word-count" style="color: #666; font-size: 0.85rem; font-weight: 500;">0 Kata</span>
+            
+            <div class="editor-footer">
+                <div class="editor-stats">
+                    <span id="word-count">0 kata</span>
+                    <span class="stat-separator">•</span>
+                    <span id="char-count">0 karakter</span>
+                    <span class="stat-separator">•</span>
+                    <span id="read-time">0m baca</span>
+                </div>
+                <div class="editor-actions">
+                    <button id="btn-editor-menu" class="icon-btn-sm">⋮</button>
+                </div>
             </div>
         </main>
+
+        <!-- Focus Mode Overlay -->
+        <div id="focus-overlay" class="focus-overlay hidden">
+            <div class="focus-toolbar">
+                <button id="btn-exit-focus" class="icon-btn">✕ Keluar</button>
+                <span id="focus-word-count">0 kata</span>
+            </div>
+            <div class="focus-editor">
+                <input type="text" id="focus-chapter-title" placeholder="Judul Chapter" />
+                <textarea id="focus-chapter-content" placeholder="Tulis tanpa gangguan..."></textarea>
+            </div>
+        </div>
+
+        <!-- Editor Bottom Sheet -->
+        <div id="editor-sheet" class="bottom-sheet hidden">
+            <div class="sheet-handle"></div>
+            <div class="sheet-content">
+                <button class="sheet-item" id="sheet-export-txt">📄 Export sebagai TXT</button>
+                <button class="sheet-item" id="sheet-export-md">📝 Export sebagai Markdown</button>
+                <button class="sheet-item" id="sheet-export-json">📋 Export sebagai JSON</button>
+                <div class="sheet-divider"></div>
+                <button class="sheet-item danger" id="sheet-delete-chapter">🗑️ Hapus Chapter</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Bible Screen -->
-    <div id="bible-screen" class="hidden">
-        <header class="editor-header">
+    <!-- ========== BIBLE SCREEN ========== -->
+    <div id="bible-screen" class="screen hidden">
+        <header class="editor-header glass">
             <button id="btn-back-detail-from-bible" class="icon-btn">← Cerita</button>
             <h2>Story Bible</h2>
             <button id="btn-new-bible" class="icon-btn" style="color: #a855f7;">+ Entri</button>
         </header>
-        <main class="editor-workspace" style="overflow-y: auto;">
-            <p style="color:#888; font-size:0.9rem; margin-bottom: 16px;">Catatan karakter, lokasi, dan world-building.</p>
+        
+        <main class="editor-workspace">
+            <p class="bible-intro">Catatan karakter, lokasi, dan world-building.</p>
+            
+            <!-- Bible Filter -->
+            <div class="bible-filters">
+                <button class="bible-filter active" data-category="all">Semua</button>
+                <button class="bible-filter" data-category="Karakter">👤 Karakter</button>
+                <button class="bible-filter" data-category="Lokasi">📍 Lokasi</button>
+                <button class="bible-filter" data-category="World-Building">🌍 World</button>
+            </div>
+            
             <div id="bible-container"></div>
         </main>
     </div>
 
-    <!-- Bible Editor Screen -->
-    <div id="bible-editor-screen" class="hidden">
-        <header class="editor-header">
+    <!-- ========== BIBLE EDITOR SCREEN ========== -->
+    <div id="bible-editor-screen" class="screen hidden">
+        <header class="editor-header glass">
             <button id="btn-cancel-bible" class="icon-btn" style="color: #ff3b30;">Batal</button>
             <h2 id="bible-editor-title">Entri Baru</h2>
             <button id="btn-save-bible" class="icon-btn" style="color: #4cd964;">Simpan</button>
         </header>
+        
         <main class="editor-workspace">
-            <select id="bible-category" style="background:#1a1a1a; color:#fff; padding:12px; border-radius:12px; border:none; margin-bottom:16px; outline:none; font-family:inherit;">
-                <option value="Karakter">👤 Karakter</option>
-                <option value="Lokasi">📍 Lokasi</option>
-                <option value="World-Building">🌍 World-Building</option>
-                <option value="Lainnya">📌 Lainnya</option>
-            </select>
-            <input type="text" id="bible-entry-title" placeholder="Nama Karakter / Lokasi..." style="background:none; border:none; color:#fff; font-size:1.5rem; font-weight:700; margin-bottom:16px; outline:none; font-family:inherit;" />
-            <textarea id="bible-entry-content" placeholder="Tulis deskripsi, ciri fisik, atau detail penting di sini..."></textarea>
+            <div class="form-group">
+                <label>Kategori</label>
+                <select id="bible-category" class="form-select">
+                    <option value="Karakter">👤 Karakter</option>
+                    <option value="Lokasi">📍 Lokasi</option>
+                    <option value="World-Building">🌍 World-Building</option>
+                    <option value="Lainnya">📌 Lainnya</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Judul Entri</label>
+                <input type="text" id="bible-entry-title" placeholder="Nama Karakter / Lokasi..." />
+            </div>
+            
+            <div class="form-group">
+                <label>Deskripsi</label>
+                <textarea id="bible-entry-content" placeholder="Tulis deskripsi, ciri fisik, atau detail penting di sini..."></textarea>
+            </div>
         </main>
+    </div>
+
+    <!-- ========== NEW STORY MODAL ========== -->
+    <div id="new-story-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Cerita Baru</h3>
+                <button id="btn-close-modal" class="icon-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Judul Cerita</label>
+                    <input type="text" id="new-story-title" placeholder="Judul ceritamu..." />
+                </div>
+                <div class="form-group">
+                    <label>Sinopsis</label>
+                    <textarea id="new-story-synopsis" placeholder="Ceritakan secara singkat..." rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-story" class="btn-ghost">Batal</button>
+                <button id="btn-create-story" class="btn-primary">Buat Cerita</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Settings Modal -->
+    <div id="goal-modal" class="modal-overlay hidden">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3>Target Menulis</h3>
+                <button id="btn-close-goal" class="icon-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Target Kata</label>
+                    <input type="number" id="goal-input" value="500" min="100" step="100" />
+                </div>
+                <div class="form-group">
+                    <label>Durasi Timer (menit)</label>
+                    <input type="number" id="timer-input" value="25" min="5" step="5" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-save-goal" class="btn-primary">Simpan</button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
