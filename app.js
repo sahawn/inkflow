@@ -57,6 +57,21 @@ function formatDate(updatedAt) {
     return '-';
 }
 
+// Converts Firestore Timestamp, Date, ISO string, or numeric timestamp to millis.
+// Missing/invalid dates sort last without hiding the document from the UI.
+function getTimestampMillis(value) {
+    if (!value) return 0;
+    try {
+        if (value instanceof Date) return value.getTime() || 0;
+        if (typeof value.toDate === 'function') return value.toDate().getTime() || 0;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        const millis = new Date(value).getTime();
+        return Number.isFinite(millis) ? millis : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
 function countWords(text) {
     if (!text) return 0;
     return text.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -274,12 +289,24 @@ function goBack() {
 // =========================================
 function initAuth() {
     auth.onAuthStateChanged((user) => {
+        const accountChanged = (currentUser?.uid || null) !== (user?.uid || null);
+
+        if (accountChanged) {
+            // Never show one account's in-memory list while another account is loading.
+            allStories = [];
+            currentStoryId = null;
+            currentChapterId = null;
+            currentBibleId = null;
+            currentStory = null;
+            bibleEntries = [];
+        }
+
         if (user) {
             currentUser = user;
-            if (els.userName) els.userName.textContent = user.displayName || user.email;
+            if (els.userName) els.userName.textContent = user.displayName || user.email || '';
             if (els.btnLogin) els.btnLogin.classList.add('hidden');
             if (els.btnLogout) els.btnLogout.classList.remove('hidden');
-            if (els.syncStatus) els.syncStatus.textContent = '✅ Tersinkron';
+            if (els.syncStatus) els.syncStatus.textContent = '⏳ Memuat data…';
             loadStories();
         } else {
             currentUser = null;
@@ -287,7 +314,15 @@ function initAuth() {
             if (els.btnLogin) els.btnLogin.classList.remove('hidden');
             if (els.btnLogout) els.btnLogout.classList.add('hidden');
             if (els.syncStatus) els.syncStatus.textContent = '⚠️ Login untuk sinkron';
-            renderStories([]);
+            if (els.projectsContainer) {
+                els.projectsContainer.innerHTML = `
+                    <div style="text-align:center; padding:40px 20px; color:var(--text-tertiary);">
+                        <div style="font-size:2rem; margin-bottom:12px;">🔐</div>
+                        <p>Login dengan akun Google yang biasa dipakai untuk melihat cerita tersimpan.</p>
+                    </div>
+                `;
+            }
+            if (els.projectCount) els.projectCount.textContent = '0 cerita';
             updateStats([]);
         }
     });
@@ -313,10 +348,10 @@ if (els.btnLogout) {
 // STORIES CRUD
 // =========================================
 async function loadStories() {
-    if (!currentUser) return;
+    const user = currentUser;
+    if (!user) return;
 
     try {
-        // Show skeleton loading
         if (els.projectsContainer) {
             els.projectsContainer.innerHTML = `
                 <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
@@ -325,20 +360,40 @@ async function loadStories() {
             `;
         }
 
-        const snapshot = await db.collection('users').doc(currentUser.uid)
-            .collection('stories').orderBy('updatedAt', 'desc').get();
+        // Do not use orderBy here: Firestore excludes documents that lack that field.
+        const snapshot = await db.collection('users').doc(user.uid)
+            .collection('stories').get();
+
+        // Ignore a late response if the user switched Google accounts meanwhile.
+        if (!currentUser || currentUser.uid !== user.uid) return;
 
         allStories = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-        }));
+        })).sort((a, b) => getTimestampMillis(b.updatedAt) - getTimestampMillis(a.updatedAt));
 
         renderStories(allStories);
         updateStats(allStories);
+        if (els.syncStatus) els.syncStatus.textContent = '✅ Data dimuat';
     } catch (err) {
         console.error('loadStories error:', err);
-        showToast('Gagal memuat cerita', 'error');
-        renderStories([]);
+        if (!currentUser || currentUser.uid !== user.uid) return;
+        if (els.syncStatus) els.syncStatus.textContent = '⚠️ Gagal memuat data';
+        showToast('Riwayat gagal dimuat. Data belum tentu hilang.', 'error');
+
+        // Do not render an empty list on a read error: that makes data look deleted.
+        if (allStories.length > 0) {
+            renderStories(allStories);
+        } else if (els.projectsContainer) {
+            els.projectsContainer.innerHTML = `
+                <div style="text-align:center; padding:30px 20px; color:var(--text-tertiary);">
+                    <p>Riwayat belum berhasil dimuat. Cek akun Google, koneksi, dan Firestore Rules, lalu muat ulang.</p>
+                    <button class="btn-primary" id="btn-retry-load-stories" type="button">Coba lagi</button>
+                </div>
+            `;
+            const retryButton = document.getElementById('btn-retry-load-stories');
+            if (retryButton) retryButton.addEventListener('click', loadStories);
+        }
     }
 }
 
@@ -624,12 +679,16 @@ async function loadChapters(storyId) {
     try {
         const snapshot = await db.collection('users').doc(currentUser.uid)
             .collection('stories').doc(storyId)
-            .collection('chapters').orderBy('order', 'asc').get();
+            .collection('chapters').get();
 
         const chapters = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-        }));
+        })).sort((a, b) => {
+            const orderA = Number.isFinite(Number(a.order)) && a.order !== undefined ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+            const orderB = Number.isFinite(Number(b.order)) && b.order !== undefined ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+            return (orderA - orderB) || (getTimestampMillis(a.createdAt) - getTimestampMillis(b.createdAt));
+        });
 
         renderChapters(chapters);
         updateDetailStats(chapters);
@@ -775,7 +834,8 @@ async function saveChapter(silent = false) {
 
     if (!content.trim() && !title) {
         if (!silent) showToast('Chapter kosong, tidak disimpan', 'info');
-        goBack();
+        await loadChapters(currentStoryId);
+        showScreen('story-detail-screen');
         return;
     }
 
@@ -809,8 +869,13 @@ async function saveChapter(silent = false) {
 
         await updateStoryWordCount();
 
-        if (!silent) showToast('Chapter disimpan!', 'success');
-        if (silent) goBack();
+        if (!silent) {
+            showToast('Chapter disimpan!', 'success');
+        } else {
+            // Navigate directly; calling goBack() here would call saveChapter() again.
+            await loadChapters(currentStoryId);
+            showScreen('story-detail-screen');
+        }
     } catch (err) {
         console.error('saveChapter error:', err);
         showToast('Gagal menyimpan', 'error');
@@ -1022,7 +1087,10 @@ if (els.sheetDeleteChapter) {
                 .collection('chapters').doc(currentChapterId).delete();
 
             showToast('Chapter dihapus', 'success');
-            goBack();
+            currentChapterId = null;
+            isEditingChapter = false;
+            await loadChapters(currentStoryId);
+            showScreen('story-detail-screen');
         } catch (err) {
             console.error('deleteChapter error:', err);
             showToast('Gagal menghapus', 'error');
@@ -1083,9 +1151,13 @@ async function exportStory(format) {
     try {
         const snap = await db.collection('users').doc(currentUser.uid)
             .collection('stories').doc(currentStoryId)
-            .collection('chapters').orderBy('order', 'asc').get();
+            .collection('chapters').get();
 
-        const chapters = snap.docs.map(d => d.data());
+        const chapters = snap.docs.map(d => d.data()).sort((a, b) => {
+            const orderA = Number.isFinite(Number(a.order)) && a.order !== undefined ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+            const orderB = Number.isFinite(Number(b.order)) && b.order !== undefined ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+            return (orderA - orderB) || (getTimestampMillis(a.createdAt) - getTimestampMillis(b.createdAt));
+        });
         const story = currentStory;
 
         let content = '';
@@ -1139,12 +1211,12 @@ async function loadBibleEntries() {
     try {
         const snapshot = await db.collection('users').doc(currentUser.uid)
             .collection('stories').doc(currentStoryId)
-            .collection('bible').orderBy('createdAt', 'desc').get();
+            .collection('bible').get();
 
         bibleEntries = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-        }));
+        })).sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
 
         renderBibleEntries();
     } catch (err) {
