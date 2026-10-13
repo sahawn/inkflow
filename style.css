@@ -1594,3 +1594,61 @@ body {
     background: rgba(0, 122, 255, 0.3);
     color: var(--text-primary);
 }
+
+/* =========================================
+   STORY BIBLE SCROLL + CONTENT FIX
+   Keeps the Story Bible header fixed while allowing its content to scroll.
+========================================= */
+#bible-screen > .editor-header {
+    flex: 0 0 auto;
+}
+
+#bible-screen > .editor-workspace {
+    display: block;
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+}
+
+#bible-screen .bible-intro {
+    display: block;
+    margin-bottom: 16px;
+}
+
+#bible-screen .bible-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    width: 100%;
+    min-height: 42px;
+    margin-bottom: 16px;
+    padding: 4px 2px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    box-sizing: border-box;
+    scrollbar-width: none;
+}
+
+#bible-screen .bible-filter {
+    flex: 0 0 auto;
+    min-height: 32px;
+    line-height: 1.2;
+}
+
+/* Show complete Story Bible notes instead of truncating them at two lines. */
+#bible-screen .bible-card p {
+    display: block;
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: initial;
+}
+
+#bible-screen #bible-container {
+    padding-bottom: 24px;
+}
+
